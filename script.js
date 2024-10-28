@@ -1,61 +1,154 @@
-$w.onReady(function () {
-    // Check if the browser supports geolocation
+// Replace with your OpenWeatherMap API key
+const weatherApiKey = 'dd740e37a94937f0bcfb43f3f82f4d17';
+
+// Automatically get weather by user's location on page load
+window.onload = function() {
+    getWeatherByLocation();
+};
+
+// Function to get weather by city name
+async function getWeather() {
+    const city = document.getElementById("city").value;
+    if (!city) {
+        alert("Please enter a city name");
+        return;
+    }
+
+    const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${weatherApiKey}&units=metric`;
+    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${weatherApiKey}&units=metric`;
+
+    try {
+        const [weatherResponse, forecastResponse] = await Promise.all([
+            fetch(weatherUrl),
+            fetch(forecastUrl)
+        ]);
+        const weatherData = await weatherResponse.json();
+        const forecastData = await forecastResponse.json();
+
+        if (weatherData.cod === 200) {
+            displayCurrentWeather(weatherData);
+            displayForecast(forecastData);
+            displayHourlyForecast(forecastData);
+        } else {
+            alert("City not found!");
+        }
+    } catch (error) {
+        alert("Failed to fetch weather data");
+        console.error(error);
+    }
+}
+
+// Function to get weather by user's current location
+function getWeatherByLocation() {
     if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(fetchWeather, handleError);
+        navigator.geolocation.getCurrentPosition(async position => {
+            const { latitude, longitude } = position.coords;
+            const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${weatherApiKey}&units=metric`;
+            const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&appid=${weatherApiKey}&units=metric`;
+
+            try {
+                const [weatherResponse, forecastResponse] = await Promise.all([
+                    fetch(weatherUrl),
+                    fetch(forecastUrl)
+                ]);
+                const weatherData = await weatherResponse.json();
+                const forecastData = await forecastResponse.json();
+
+                if (weatherData.cod === 200) {
+                    displayCurrentWeather(weatherData);
+                    displayForecast(forecastData);
+                    displayHourlyForecast(forecastData);
+                } else {
+                    alert("Location-based weather not found!");
+                }
+            } catch (error) {
+                alert("Failed to fetch weather data by location");
+                console.error(error);
+            }
+        }, error => {
+            alert("Unable to retrieve location. Please enter a city name.");
+            console.error(error);
+        });
     } else {
-        $w("#location").text = "Geolocation is not supported by this browser.";
+        alert("Geolocation is not supported by this browser.");
     }
-});
-
-function fetchWeather(position) {
-    const lat = position.coords.latitude;
-    const lon = position.coords.longitude;
-    const apiKey = "dd740e37a94937f0bcfb43f3f82f4d17";
-    const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=imperial`;
-
-    fetch(weatherUrl)
-        .then(response => response.json())
-        .then(data => updateWeatherUI(data))
-        .catch(error => console.error("Error fetching weather data:", error));
 }
 
-function updateWeatherUI(data) {
-    const weatherDescription = data.weather[0].description;
-    const weatherEmoji = getWeatherEmoji(weatherDescription);
-
-    $w("#location").text = `${data.name}, ${data.sys.country}`;
-    $w("#temperature").text = `${Math.round(data.main.temp)} °F`;
-    $w("#description").text = `${weatherEmoji} ${weatherDescription}`;
-    $w("#feels-like").text = `${Math.round(data.main.feels_like)} °F`;
-    $w("#humidity").text = `${data.main.humidity}%`;
-    $w("#wind").text = `${Math.round(data.wind.speed)} mph`;
-}
-
-function handleError(error) {
-    console.error("Geolocation error:", error);
-    $w("#location").text = "Unable to retrieve your location for weather updates.";
-}
-
-// Function to get an emoji based on the weather description
+// Function to map weather conditions to emojis
 function getWeatherEmoji(description) {
-    description = description.toLowerCase();
+    const desc = description.toLowerCase();
+    if (desc.includes("clear")) return "☀️";
+    if (desc.includes("clouds")) return "☁️";
+    if (desc.includes("rain")) return "🌧️";
+    if (desc.includes("drizzle")) return "🌦️";
+    if (desc.includes("thunderstorm")) return "⛈️";
+    if (desc.includes("snow")) return "❄️";
+    if (desc.includes("mist") || desc.includes("fog")) return "🌫️";
+    if (desc.includes("night")) return "🌙";
+    return "🌡️";
+}
 
-    if (description.includes("clear")) {
-        const hours = new Date().getHours();
-        return (hours > 6 && hours < 18) ? "☀️" : "🌙"; // Sun for day, moon for night
-    } else if (description.includes("clouds")) {
-        return "☁️"; // Cloud
-    } else if (description.includes("rain")) {
-        return "🌧️"; // Rain
-    } else if (description.includes("thunderstorm")) {
-        return "⛈️"; // Thunderstorm
-    } else if (description.includes("snow")) {
-        return "❄️"; // Snow
-    } else if (description.includes("mist") || description.includes("fog")) {
-        return "🌫️"; // Fog or mist
-    } else if (description.includes("drizzle")) {
-        return "🌦️"; // Drizzle
-    } else {
-        return "🌡️"; // Default thermometer icon for unknown weather
-    }
+function displayCurrentWeather(data) {
+    const { name } = data;
+    const { temp, humidity } = data.main;
+    const { main, description } = data.weather[0];
+    const { speed } = data.wind;
+
+    const emoji = getWeatherEmoji(description);
+
+    document.getElementById("currentWeather").innerHTML = `
+        <h2>${name} ${emoji}</h2>
+        <p><strong>Temperature:</strong> ${temp}°C</p>
+        <p><strong>Condition:</strong> ${main} - ${description}</p>
+        <p><strong>Humidity:</strong> ${humidity}%</p>
+        <p><strong>Wind Speed:</strong> ${speed} m/s</p>
+    `;
+}
+
+function displayForecast(data) {
+    const forecastContainer = document.getElementById("forecast");
+    forecastContainer.innerHTML = '';
+
+    const dailyData = data.list.filter(item => item.dt_txt.includes("12:00:00"));
+    dailyData.forEach(day => {
+        const date = new Date(day.dt * 1000).toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric'
+        });
+        const emoji = getWeatherEmoji(day.weather[0].description);
+
+        forecastContainer.innerHTML += `
+            <div class="forecast-item">
+                <p>${date}</p>
+                <p>${emoji} ${day.main.temp}°C</p>
+                <p>${day.weather[0].main}</p>
+            </div>
+        `;
+    });
+}
+
+function displayHourlyForecast(data) {
+    const hours = data.list.slice(0, 8);
+    const labels = hours.map(hour => new Date(hour.dt * 1000).getHours() + ':00');
+    const temps = hours.map(hour => hour.main.temp);
+
+    const ctx = document.getElementById('hourlyChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Temperature (°C)',
+                data: temps,
+                borderColor: '#ff6347',
+                fill: false,
+            }]
+        },
+        options: {
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
 }
