@@ -1,6 +1,6 @@
 // Mapbox and OpenWeatherMap API keys
-mapboxgl.accessToken = 'YOUR_MAPBOX_TOKEN';
-const weatherApiKey = 'YOUR_OPENWEATHERMAP_API_KEY';
+mapboxgl.accessToken = 'pk.eyJ1IjoibWl0aHVuc2cwOCIsImEiOiJjbTJzbGF1MWcxanFyMmxzM2U0MHE5OG5yIn0.VNR_-X-4BxkLhEyX1F06sQ';
+const weatherApiKey = 'dd740e37a94937f0bcfb43f3f82f4d17';
 
 let map;
 
