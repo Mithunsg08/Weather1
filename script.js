@@ -1,14 +1,10 @@
-// Mapbox Access Token
-mapboxgl.accessToken = 'pk.eyJ1IjoibWl0aHVuc2cwOCIsImEiOiJjbTJzbGF1MWcxanFyMmxzM2U0MHE5OG5yIn0.VNR_-X-4BxkLhEyX1F06sQ';
+// Mapbox and OpenWeatherMap API keys
+mapboxgl.accessToken = 'YOUR_MAPBOX_TOKEN';
+const weatherApiKey = 'YOUR_OPENWEATHERMAP_API_KEY';
 
-// OpenWeatherMap API Key
-const weatherApiKey = 'dd740e37a94937f0bcfb43f3f82f4d17';
-
-// Create Mapbox map instance
 let map;
 
 function initializeMap(lat, lon) {
-    // Initialize the map
     map = new mapboxgl.Map({
         container: 'map',
         style: 'mapbox://styles/mapbox/streets-v11',
@@ -16,18 +12,13 @@ function initializeMap(lat, lon) {
         zoom: 8
     });
 
-    // Add navigation controls (zoom in/out)
     map.addControl(new mapboxgl.NavigationControl());
-
-    // Add a marker for the user's location
     new mapboxgl.Marker().setLngLat([lon, lat]).addTo(map);
 
-    // Add weather overlay
     addWeatherLayer(lat, lon);
 }
 
 function addWeatherLayer(lat, lon) {
-    // OpenWeatherMap Tile Layer for clouds (or other weather types)
     map.on('load', () => {
         map.addSource('clouds', {
             type: 'raster',
@@ -36,24 +27,26 @@ function addWeatherLayer(lat, lon) {
             ],
             tileSize: 256
         });
-
         map.addLayer({
             id: 'clouds-layer',
             type: 'raster',
             source: 'clouds',
-            paint: {
-                'raster-opacity': 0.7
-            }
+            paint: { 'raster-opacity': 0.7 }
         });
     });
 }
 
-// Automatically get weather by user's location on page load
-window.onload = function() {
-    getWeatherByLocation();
-};
+async function getWeatherByLocation() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async position => {
+            const { latitude, longitude } = position.coords;
+            await fetchWeatherData(latitude, longitude);
+        });
+    } else {
+        alert("Geolocation is not supported by this browser.");
+    }
+}
 
-// Function to get weather by city name
 async function getWeather() {
     const city = document.getElementById("city").value;
     if (!city) {
@@ -61,55 +54,76 @@ async function getWeather() {
         return;
     }
 
-    const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${weatherApiKey}&units=metric`;
-
-    try {
-        const response = await fetch(weatherUrl);
-        const weatherData = await response.json();
-
-        if (weatherData.cod === 200) {
-            displayCurrentWeather(weatherData);
-            initializeMap(weatherData.coord.lat, weatherData.coord.lon);
-        } else {
-            alert("City not found!");
-        }
-    } catch (error) {
-        alert("Failed to fetch weather data");
-        console.error(error);
-    }
-}
-
-// Fetch weather and initialize map based on user's location
-function getWeatherByLocation() {
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(async position => {
-            const { latitude, longitude } = position.coords;
-            const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${weatherApiKey}&units=metric`;
-
-            try {
-                const response = await fetch(weatherUrl);
-                const weatherData = await response.json();
-
-                if (weatherData.cod === 200) {
-                    displayCurrentWeather(weatherData);
-                    initializeMap(latitude, longitude);
-                } else {
-                    alert("Weather data not found!");
-                }
-            } catch (error) {
-                alert("Failed to fetch weather data");
-                console.error(error);
-            }
-        }, error => {
-            alert("Unable to retrieve location. Please enter a city name.");
-            console.error(error);
-        });
+    const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${weatherApiKey}&units=metric`);
+    const data = await response.json();
+    
+    if (data.cod === 200) {
+        const { lat, lon } = data.coord;
+        await fetchWeatherData(lat, lon);
     } else {
-        alert("Geolocation is not supported by this browser.");
+        alert("City not found!");
     }
 }
 
-// Function to map weather conditions to emojis
+async function fetchWeatherData(lat, lon) {
+    const response = await fetch(`https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&exclude=minutely&appid=${weatherApiKey}&units=metric`);
+    const weatherData = await response.json();
+
+    displayCurrentWeather(weatherData.current);
+    displayDailyForecast(weatherData.daily);
+    displayHourlyForecast(weatherData.hourly);
+
+    initializeMap(lat, lon);
+}
+
+function displayCurrentWeather(data) {
+    const { temp, humidity, wind_speed, weather } = data;
+    const description = weather[0].description;
+    const emoji = getWeatherEmoji(description);
+
+    document.getElementById("currentWeather").innerHTML = `
+        <h2>Current Weather ${emoji}</h2>
+        <p><strong>Temperature:</strong> ${temp}°C</p>
+        <p><strong>Condition:</strong> ${description}</p>
+        <p><strong>Humidity:</strong> ${humidity}%</p>
+        <p><strong>Wind Speed:</strong> ${wind_speed} m/s</p>
+    `;
+}
+
+function displayDailyForecast(daily) {
+    const dailyForecastEl = document.getElementById("dailyForecast");
+    dailyForecastEl.innerHTML = daily.slice(0, 10).map(day => {
+        const date = new Date(day.dt * 1000).toLocaleDateString();
+        const temp = day.temp.day;
+        const description = day.weather[0].description;
+        const emoji = getWeatherEmoji(description);
+        
+        return `
+            <div class="forecast-day">
+                <p><strong>${date}</strong></p>
+                <p>${emoji} ${temp}°C, ${description}</p>
+            </div>
+        `;
+    }).join('');
+}
+
+function displayHourlyForecast(hourly) {
+    const hourlyForecastEl = document.getElementById("hourlyForecast");
+    hourlyForecastEl.innerHTML = hourly.slice(0, 24).map(hour => {
+        const time = new Date(hour.dt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const temp = hour.temp;
+        const description = hour.weather[0].description;
+        const emoji = getWeatherEmoji(description);
+
+        return `
+            <div class="forecast-hour">
+                <p><strong>${time}</strong></p>
+                <p>${emoji} ${temp}°C, ${description}</p>
+            </div>
+        `;
+    }).join('');
+}
+
 function getWeatherEmoji(description) {
     const desc = description.toLowerCase();
     if (desc.includes("clear")) return "☀️";
@@ -120,21 +134,4 @@ function getWeatherEmoji(description) {
     if (desc.includes("snow")) return "❄️";
     if (desc.includes("mist") || desc.includes("fog")) return "🌫️";
     return "🌡️";
-}
-
-function displayCurrentWeather(data) {
-    const { name } = data;
-    const { temp, humidity } = data.main;
-    const { main, description } = data.weather[0];
-    const { speed } = data.wind;
-
-    const emoji = getWeatherEmoji(description);
-
-    document.getElementById("currentWeather").innerHTML = `
-        <h2>${name} ${emoji}</h2>
-        <p><strong>Temperature:</strong> ${temp}°C</p>
-        <p><strong>Condition:</strong> ${main} - ${description}</p>
-        <p><strong>Humidity:</strong> ${humidity}%</p>
-        <p><strong>Wind Speed:</strong> ${speed} m/s</p>
-    `;
 }
