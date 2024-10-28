@@ -48,6 +48,37 @@ function addWeatherLayer(lat, lon) {
     });
 }
 
+// Automatically get weather by user's location on page load
+window.onload = function() {
+    getWeatherByLocation();
+};
+
+// Function to get weather by city name
+async function getWeather() {
+    const city = document.getElementById("city").value;
+    if (!city) {
+        alert("Please enter a city name");
+        return;
+    }
+
+    const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${weatherApiKey}&units=metric`;
+
+    try {
+        const response = await fetch(weatherUrl);
+        const weatherData = await response.json();
+
+        if (weatherData.cod === 200) {
+            displayCurrentWeather(weatherData);
+            initializeMap(weatherData.coord.lat, weatherData.coord.lon);
+        } else {
+            alert("City not found!");
+        }
+    } catch (error) {
+        alert("Failed to fetch weather data");
+        console.error(error);
+    }
+}
+
 // Fetch weather and initialize map based on user's location
 function getWeatherByLocation() {
     if (navigator.geolocation) {
@@ -76,4 +107,34 @@ function getWeatherByLocation() {
     } else {
         alert("Geolocation is not supported by this browser.");
     }
+}
+
+// Function to map weather conditions to emojis
+function getWeatherEmoji(description) {
+    const desc = description.toLowerCase();
+    if (desc.includes("clear")) return "☀️";
+    if (desc.includes("clouds")) return "☁️";
+    if (desc.includes("rain")) return "🌧️";
+    if (desc.includes("drizzle")) return "🌦️";
+    if (desc.includes("thunderstorm")) return "⛈️";
+    if (desc.includes("snow")) return "❄️";
+    if (desc.includes("mist") || desc.includes("fog")) return "🌫️";
+    return "🌡️";
+}
+
+function displayCurrentWeather(data) {
+    const { name } = data;
+    const { temp, humidity } = data.main;
+    const { main, description } = data.weather[0];
+    const { speed } = data.wind;
+
+    const emoji = getWeatherEmoji(description);
+
+    document.getElementById("currentWeather").innerHTML = `
+        <h2>${name} ${emoji}</h2>
+        <p><strong>Temperature:</strong> ${temp}°C</p>
+        <p><strong>Condition:</strong> ${main} - ${description}</p>
+        <p><strong>Humidity:</strong> ${humidity}%</p>
+        <p><strong>Wind Speed:</strong> ${speed} m/s</p>
+    `;
 }
