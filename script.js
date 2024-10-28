@@ -1,68 +1,72 @@
-// Replace with your OpenWeatherMap API key
+// Mapbox Access Token
+mapboxgl.accessToken = 'pk.eyJ1IjoibWl0aHVuc2cwOCIsImEiOiJjbTJzbGF1MWcxanFyMmxzM2U0MHE5OG5yIn0.VNR_-X-4BxkLhEyX1F06sQ';
+
+// OpenWeatherMap API Key
 const weatherApiKey = 'dd740e37a94937f0bcfb43f3f82f4d17';
 
-// Automatically get weather by user's location on page load
-window.onload = function() {
-    getWeatherByLocation();
-};
+// Create Mapbox map instance
+let map;
 
-// Function to get weather by city name
-async function getWeather() {
-    const city = document.getElementById("city").value;
-    if (!city) {
-        alert("Please enter a city name");
-        return;
-    }
+function initializeMap(lat, lon) {
+    // Initialize the map
+    map = new mapboxgl.Map({
+        container: 'map',
+        style: 'mapbox://styles/mapbox/streets-v11',
+        center: [lon, lat],
+        zoom: 8
+    });
 
-    const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${weatherApiKey}&units=metric`;
-    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${weatherApiKey}&units=metric`;
+    // Add navigation controls (zoom in/out)
+    map.addControl(new mapboxgl.NavigationControl());
 
-    try {
-        const [weatherResponse, forecastResponse] = await Promise.all([
-            fetch(weatherUrl),
-            fetch(forecastUrl)
-        ]);
-        const weatherData = await weatherResponse.json();
-        const forecastData = await forecastResponse.json();
+    // Add a marker for the user's location
+    new mapboxgl.Marker().setLngLat([lon, lat]).addTo(map);
 
-        if (weatherData.cod === 200) {
-            displayCurrentWeather(weatherData);
-            displayForecast(forecastData);
-            displayHourlyForecast(forecastData);
-        } else {
-            alert("City not found!");
-        }
-    } catch (error) {
-        alert("Failed to fetch weather data");
-        console.error(error);
-    }
+    // Add weather overlay
+    addWeatherLayer(lat, lon);
 }
 
-// Function to get weather by user's current location
+function addWeatherLayer(lat, lon) {
+    // OpenWeatherMap Tile Layer for clouds (or other weather types)
+    map.on('load', () => {
+        map.addSource('clouds', {
+            type: 'raster',
+            tiles: [
+                `https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${weatherApiKey}`
+            ],
+            tileSize: 256
+        });
+
+        map.addLayer({
+            id: 'clouds-layer',
+            type: 'raster',
+            source: 'clouds',
+            paint: {
+                'raster-opacity': 0.7
+            }
+        });
+    });
+}
+
+// Fetch weather and initialize map based on user's location
 function getWeatherByLocation() {
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(async position => {
             const { latitude, longitude } = position.coords;
             const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${weatherApiKey}&units=metric`;
-            const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&appid=${weatherApiKey}&units=metric`;
 
             try {
-                const [weatherResponse, forecastResponse] = await Promise.all([
-                    fetch(weatherUrl),
-                    fetch(forecastUrl)
-                ]);
-                const weatherData = await weatherResponse.json();
-                const forecastData = await forecastResponse.json();
+                const response = await fetch(weatherUrl);
+                const weatherData = await response.json();
 
                 if (weatherData.cod === 200) {
                     displayCurrentWeather(weatherData);
-                    displayForecast(forecastData);
-                    displayHourlyForecast(forecastData);
+                    initializeMap(latitude, longitude);
                 } else {
-                    alert("Location-based weather not found!");
+                    alert("Weather data not found!");
                 }
             } catch (error) {
-                alert("Failed to fetch weather data by location");
+                alert("Failed to fetch weather data");
                 console.error(error);
             }
         }, error => {
@@ -72,83 +76,4 @@ function getWeatherByLocation() {
     } else {
         alert("Geolocation is not supported by this browser.");
     }
-}
-
-// Function to map weather conditions to emojis
-function getWeatherEmoji(description) {
-    const desc = description.toLowerCase();
-    if (desc.includes("clear")) return "☀️";
-    if (desc.includes("clouds")) return "☁️";
-    if (desc.includes("rain")) return "🌧️";
-    if (desc.includes("drizzle")) return "🌦️";
-    if (desc.includes("thunderstorm")) return "⛈️";
-    if (desc.includes("snow")) return "❄️";
-    if (desc.includes("mist") || desc.includes("fog")) return "🌫️";
-    if (desc.includes("night")) return "🌙";
-    return "🌡️";
-}
-
-function displayCurrentWeather(data) {
-    const { name } = data;
-    const { temp, humidity } = data.main;
-    const { main, description } = data.weather[0];
-    const { speed } = data.wind;
-
-    const emoji = getWeatherEmoji(description);
-
-    document.getElementById("currentWeather").innerHTML = `
-        <h2>${name} ${emoji}</h2>
-        <p><strong>Temperature:</strong> ${temp}°C</p>
-        <p><strong>Condition:</strong> ${main} - ${description}</p>
-        <p><strong>Humidity:</strong> ${humidity}%</p>
-        <p><strong>Wind Speed:</strong> ${speed} m/s</p>
-    `;
-}
-
-function displayForecast(data) {
-    const forecastContainer = document.getElementById("forecast");
-    forecastContainer.innerHTML = '';
-
-    const dailyData = data.list.filter(item => item.dt_txt.includes("12:00:00"));
-    dailyData.forEach(day => {
-        const date = new Date(day.dt * 1000).toLocaleDateString('en-US', {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric'
-        });
-        const emoji = getWeatherEmoji(day.weather[0].description);
-
-        forecastContainer.innerHTML += `
-            <div class="forecast-item">
-                <p>${date}</p>
-                <p>${emoji} ${day.main.temp}°C</p>
-                <p>${day.weather[0].main}</p>
-            </div>
-        `;
-    });
-}
-
-function displayHourlyForecast(data) {
-    const hours = data.list.slice(0, 8);
-    const labels = hours.map(hour => new Date(hour.dt * 1000).getHours() + ':00');
-    const temps = hours.map(hour => hour.main.temp);
-
-    const ctx = document.getElementById('hourlyChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Temperature (°C)',
-                data: temps,
-                borderColor: '#ff6347',
-                fill: false,
-            }]
-        },
-        options: {
-            scales: {
-                y: { beginAtZero: true }
-            }
-        }
-    });
 }
